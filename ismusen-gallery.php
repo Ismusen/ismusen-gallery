@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Ismusen相册插件
  * Plugin URI: https://ismusen.com
- * Description: Ismusen博客定制相册插件 
+ * Description: 为Ismusen博客定制的精美相册插件 - 优化版
  * Version: 1.1.0
  * Author: Ismusen
  * Author URI: https://ismusen.com
@@ -19,13 +19,6 @@ if (!defined('ABSPATH')) {
 define('ISMUSEN_GALLERY_VERSION', '1.1.0');
 define('ISMUSEN_GALLERY_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('ISMUSEN_GALLERY_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('ISMUSEN_GALLERY_IMAGE_DIR', ISMUSEN_GALLERY_PLUGIN_PATH . 'images/');
-define('ISMUSEN_GALLERY_IMAGE_URL', ISMUSEN_GALLERY_PLUGIN_URL . 'images/');
-
-// 创建图片目录
-if (!file_exists(ISMUSEN_GALLERY_IMAGE_DIR)) {
-    wp_mkdir_p(ISMUSEN_GALLERY_IMAGE_DIR);
-}
 
 // 注册激活和停用钩子
 register_activation_hook(__FILE__, 'ismusen_gallery_activate');
@@ -73,7 +66,7 @@ function ismusen_gallery_activate() {
             array('id' => 25, 'src' => 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&auto=format&fit=c crop&w=500&q=80', 'title' => '特写', 'desc' => '马德里, 2023', 'category' => 'portrait', 'orientation' => 'portrait'),
             array('id' => 26, 'src' => 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80', 'title' => '自然光人像', 'desc' => '里斯本, 2022', 'category' => 'portrait', 'orientation' => 'portrait'),
             array('id' => 27, 'src' => 'https://images.unsplash.com/photo-1491349174775-aaafddd81942?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80', 'title' => '街头人像', 'desc' => '阿姆斯特丹, 2022', 'category' => 'portrait', 'orientation' => 'portrait'),
-            array('id' => 28, 'src' => 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80', 'title' => '职业肖像', 'desc' => '维也纳, 2022', 'category' => 'portrait', 'orientation' => 'portrait'),
+            array('id' => 28, 'src' => 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?ixlib=rb-1.2.1&auto=format&fit=c crop&w=500&q=80', 'title' => '职业肖像', 'desc' => '维也纳, 2022', 'category' => 'portrait', 'orientation' => 'portrait'),
             array('id' => 29, 'src' => 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80', 'title' => '艺术人像', 'desc' => '布拉格, 2022', 'category' => 'portrait', 'orientation' => 'portrait'),
             array('id' => 30, 'src' => 'https://images.unsplash.com/photo-1545912452-8aea7e25a3d3?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80', 'title' => '黑白人像', 'desc' => '布达佩斯, 2022', 'category' => 'portrait', 'orientation' => 'portrait'),
             
@@ -151,6 +144,9 @@ function ismusen_gallery_admin_scripts($hook) {
         return;
     }
     
+    // 加载媒体库
+    wp_enqueue_media();
+    
     // 加载管理样式
     wp_enqueue_style('ismusen-gallery-admin-style', 
         ISMUSEN_GALLERY_PLUGIN_URL . 'css/admin-style.css', 
@@ -200,21 +196,26 @@ function ismusen_gallery_handle_upload() {
             wp_send_json_error('只允许上传JPEG、PNG和GIF格式的图片');
         }
         
-        // 生成唯一文件名
-        $file_ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $file_name = uniqid() . '.' . $file_ext;
-        $file_path = ISMUSEN_GALLERY_IMAGE_DIR . $file_name;
+        // 使用WordPress媒体库处理上传
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
         
-        // 移动文件
-        if (move_uploaded_file($file['tmp_name'], $file_path)) {
-            // 返回图片URL
-            wp_send_json_success(array(
-                'url' => ISMUSEN_GALLERY_IMAGE_URL . $file_name,
-                'name' => $file['name']
-            ));
-        } else {
-            wp_send_json_error('文件上传失败');
+        $attachment_id = media_handle_upload('image', 0);
+        
+        if (is_wp_error($attachment_id)) {
+            wp_send_json_error($attachment_id->get_error_message());
         }
+        
+        // 获取上传文件的URL
+        $image_url = wp_get_attachment_url($attachment_id);
+        $image_name = basename($image_url);
+        
+        // 返回图片URL
+        wp_send_json_success(array(
+            'url' => $image_url,
+            'name' => $image_name
+        ));
     } else {
         wp_send_json_error('没有接收到文件');
     }
@@ -355,7 +356,8 @@ function ismusen_gallery_admin_page() {
                         <td>
                             <input type="file" id="image-upload" accept="image/*">
                             <button type="button" id="upload-image" class="button">上传图片</button>
-                            <p class="description">上传图片到插件目录</p>
+                            <button type="button" id="media-library-button" class="button">从媒体库选择</button>
+                            <p class="description">上传图片到WordPress媒体库</p>
                             <div id="upload-progress"></div>
                         </td>
                     </tr>
@@ -592,3 +594,5 @@ function ismusen_gallery_shortcode($atts) {
     <?php
     return ob_get_clean();
 }
+// 在需要的地方替换图片URL
+$image_url = ISMUSEN_GALLERY_PLUGIN_URL . 'cos-proxy.php?url=' . urlencode($image['src']);

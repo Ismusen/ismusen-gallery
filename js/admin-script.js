@@ -100,6 +100,28 @@ jQuery(document).ready(function($) {
         });
     });
     
+    // 媒体库选择图片
+    $("#media-library-button").click(function() {
+        var frame = wp.media({
+            title: '选择图片',
+            multiple: false,
+            library: {
+                type: 'image'
+            },
+            button: {
+                text: '使用此图片'
+            }
+        });
+        
+        frame.on('select', function() {
+            var attachment = frame.state().get('selection').first().toJSON();
+            $("#image-url").val(attachment.url);
+            $("#image-preview").html('<img src="' + attachment.url + '" class="image-preview">');
+        });
+        
+        frame.open();
+    });
+    
     // 添加图片
     $("#add-image").click(function() {
         var url = $("#image-url").val().trim();
